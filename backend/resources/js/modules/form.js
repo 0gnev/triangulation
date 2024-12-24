@@ -1,5 +1,5 @@
 import { latLngToVector3 } from './threejs/helpers';
-import { drawPath } from './threejs/paths';
+import { drawCircle } from './threejs/circles';
 import { createMarker } from './threejs/markers';
 
 /**
@@ -10,9 +10,6 @@ export function getCsrfToken() {
     const token = document.querySelector('meta[name="csrf-token"]');
     return token ? token.getAttribute('content') : '';
 }
-
-let currentNewMarker = null;
-let currentPaths = [];
 
 /**
  * Handles form submission and interaction logic.
@@ -28,11 +25,13 @@ export function handleForm(scene, referenceMarkers) {
         event.preventDefault();
 
         hideResultsAndErrors();
+        clearVisualization(scene);
 
-        const latitude = parseFloat(document.getElementById('latitude').value);
-        const longitude = parseFloat(document.getElementById('longitude').value);
+        const distanceA = parseFloat(document.getElementById('distanceA').value);
+        const distanceB = parseFloat(document.getElementById('distanceB').value);
+        const distanceC = parseFloat(document.getElementById('distanceC').value);
 
-        if (!validateCoordinates(latitude, longitude)) return;
+        if (!validateDistances(distanceA, distanceB, distanceC)) return;
 
         try {
             const response = await fetch('/api/triangulate', {
@@ -42,16 +41,16 @@ export function handleForm(scene, referenceMarkers) {
                     'Accept': 'application/json',
                     'X-CSRF-TOKEN': getCsrfToken(),
                 },
-                body: JSON.stringify({ latitude, longitude }),
+                body: JSON.stringify({ distanceA, distanceB, distanceC }),
             });
 
             const data = await response.json();
 
             if (data.success) {
-                displayResults(data.distances);
-                visualizeTriangulation(scene, latitude, longitude, referenceMarkers);
+                displayResults(data.coordinates);
+                visualizeTriangulation(scene, data.coordinates, referenceMarkers, [distanceA, distanceB, distanceC]);
             } else {
-                displayError(data.message || 'An error occurred while calculating distances.');
+                displayError(data.message || 'An error occurred while calculating the position.');
             }
         } catch (error) {
             console.error('Error:', error);
@@ -61,38 +60,49 @@ export function handleForm(scene, referenceMarkers) {
 }
 
 /**
- * Validates latitude and longitude values.
- * @param {number} latitude - The latitude value to validate.
- * @param {number} longitude - The longitude value to validate.
- * @returns {boolean} - Returns true if both values are valid, otherwise false.
+ * Validates the distances entered by the user.
+ * @param {number} distanceA - Distance from Point A
+ * @param {number} distanceB - Distance from Point B
+ * @param {number} distanceC - Distance from Point C
+ * @returns {boolean} - Returns true if all distances are valid, otherwise false.
  */
-function validateCoordinates(latitude, longitude) {
-    if (isNaN(latitude) || latitude < -90 || latitude > 90) {
-        displayError('Please enter a valid latitude value between -90 and 90.');
+function validateDistances(distanceA, distanceB, distanceC) {
+    if (isNaN(distanceA) || distanceA < 0) {
+        displayError('Please enter a valid non-negative distance for Point A.');
         return false;
     }
-    if (isNaN(longitude) || longitude < -180 || longitude > 180) {
-        displayError('Please enter a valid longitude value between -180 and 180.');
+    if (isNaN(distanceB) || distanceB < 0) {
+        displayError('Please enter a valid non-negative distance for Point B.');
+        return false;
+    }
+    if (isNaN(distanceC) || distanceC < 0) {
+        displayError('Please enter a valid non-negative distance for Point C.');
         return false;
     }
     return true;
 }
 
 /**
- * Displays the calculated distances in the UI.
- * @param {Array<Object>} distances - Array of distance objects from the backend.
+ * Displays the calculated coordinates in the UI.
+ * @param {Array<Object>} coordinates - The calculated latitude and longitude.
  */
-function displayResults(distances) {
+function displayResults(coordinates) {
     const resultDiv = document.getElementById('result');
-    const distancesList = document.getElementById('distances-list');
+    const coordinatesList = document.getElementById('coordinates-list');
 
-    distancesList.innerHTML = ''; // Clear previous entries
+    coordinatesList.innerHTML = '';
 
-    distances.forEach((item) => {
+    if (Array.isArray(coordinates)) {
+        coordinates.forEach((coord, index) => {
+            const li = document.createElement('li');
+            li.textContent = `Solution ${index + 1}: Latitude: ${coord.latitude.toFixed(6)}, Longitude: ${coord.longitude.toFixed(6)}`;
+            coordinatesList.appendChild(li);
+        });
+    } else {
         const li = document.createElement('li');
-        li.textContent = `Distance to Point ${item.reference_point}: ${item.distance_km} km`;
-        distancesList.appendChild(li);
-    });
+        li.textContent = `Latitude: ${coordinates.latitude.toFixed(6)}, Longitude: ${coordinates.longitude.toFixed(6)}`;
+        coordinatesList.appendChild(li);
+    }
 
     resultDiv.style.display = 'block';
 }
@@ -115,41 +125,61 @@ function displayError(message) {
 function hideResultsAndErrors() {
     const resultDiv = document.getElementById('result');
     const errorDiv = document.getElementById('error');
-    const distancesList = document.getElementById('distances-list');
 
     resultDiv.style.display = 'none';
     errorDiv.style.display = 'none';
-    distancesList.innerHTML = '';
 }
 
 /**
- * Visualizes the triangulation by adding a new marker and drawing paths to reference points.
+ * Clears previous visualization elements from the scene.
  * @param {THREE.Scene} scene - The Three.js scene.
- * @param {number} lat - Latitude of the new point.
- * @param {number} lng - Longitude of the new point.
- * @param {Array<THREE.Mesh>} referenceMarkers - Array of reference point markers.
  */
-function visualizeTriangulation(scene, lat, lng, referenceMarkers) {
-    if (currentNewMarker) {
-        scene.remove(currentNewMarker);
-        currentNewMarker = null;
+function clearVisualization(scene) {
+    scene.children.forEach((child) => {
+        if (child.name && child.name.startsWith('Circle_')) {
+            scene.remove(child);
+        }
+    });
+
+    const existingIntersection = scene.getObjectByName('IntersectionPoint');
+    if (existingIntersection) {
+        scene.remove(existingIntersection);
     }
 
-    currentPaths.forEach(path => {
-        scene.remove(path);
+    const existingIntersection2 = scene.getObjectByName('IntersectionPoint2');
+    if (existingIntersection2) {
+        scene.remove(existingIntersection2);
+    }
+}
+
+/**
+ * Visualizes the triangulation by drawing circles and marking the intersection points.
+ * @param {THREE.Scene} scene - The Three.js scene.
+ * @param {Array<Object>} coordinates - The calculated latitude and longitude.
+ * @param {Array<THREE.Mesh>} referenceMarkers - Array of reference point markers.
+ * @param {Array<number>} distances - Distances from each reference point.
+ */
+function visualizeTriangulation(scene, coordinates, referenceMarkers, distances) {
+    coordinates.forEach((coord, index) => {
+        const newPos = latLngToVector3(coord.latitude, coord.longitude, 1.0);
+
+        const intersectionMarker = createMarker(newPos, 0x00ff00, 0.012); // Green marker
+        intersectionMarker.name = `IntersectionPoint${index > 0 ? index + 1 : ''}`;
+        scene.add(intersectionMarker);
     });
-    currentPaths = [];
 
-    const newPos = latLngToVector3(lat, lng, 1.0);
-
-    currentNewMarker = createMarker(newPos, 0x00ff00, 0.012); // Green marker
-    scene.add(currentNewMarker);
-
-    referenceMarkers.forEach((marker) => {
-        const refPos = marker.position.clone().normalize();
-        const newPosOnSphere = newPos.clone().normalize();
-
-        const path = drawPath(scene, newPosOnSphere, refPos, 1.01, 0xffee00); // Bright yellow arcs
-        currentPaths.push(path);
+    referenceMarkers.forEach((marker, index) => {
+        const distance = distances[index]; // Distance in km
+        drawCircle(scene, marker.position, distance, getColor(index));
     });
+}
+
+/**
+ * Returns a distinct color based on the index.
+ * @param {number} index - The index of the reference point.
+ * @returns {number} - The hexadecimal color code.
+ */
+function getColor(index) {
+    const colors = [0xff0000, 0x00ff00, 0x0000ff]; // Red, Green, Blue
+    return colors[index % colors.length];
 }

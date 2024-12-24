@@ -1,3 +1,4 @@
+// earth.js
 import * as THREE from 'three';
 
 /**
@@ -37,7 +38,6 @@ export async function createEarth() {
     });
     const earthDayMesh = new THREE.Mesh(earthGeo, earthDayMat);
     group.add(earthDayMesh);
-
 
     // Clouds
     const cloudsMat = new THREE.MeshStandardMaterial({
