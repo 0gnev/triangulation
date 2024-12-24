@@ -11,6 +11,9 @@ export function getCsrfToken() {
     return token ? token.getAttribute('content') : '';
 }
 
+let currentNewMarker = null;
+let currentPaths = [];
+
 /**
  * Handles form submission and interaction logic.
  * @param {THREE.Scene} scene - The Three.js scene.
@@ -127,15 +130,26 @@ function hideResultsAndErrors() {
  * @param {Array<THREE.Mesh>} referenceMarkers - Array of reference point markers.
  */
 function visualizeTriangulation(scene, lat, lng, referenceMarkers) {
+    if (currentNewMarker) {
+        scene.remove(currentNewMarker);
+        currentNewMarker = null;
+    }
+
+    currentPaths.forEach(path => {
+        scene.remove(path);
+    });
+    currentPaths = [];
+
     const newPos = latLngToVector3(lat, lng, 1.0);
 
-    const newMarker = createMarker(newPos, 0x00ff00, 0.012); // Green marker
-    scene.add(newMarker);
+    currentNewMarker = createMarker(newPos, 0x00ff00, 0.012); // Green marker
+    scene.add(currentNewMarker);
 
     referenceMarkers.forEach((marker) => {
         const refPos = marker.position.clone().normalize();
         const newPosOnSphere = newPos.clone().normalize();
 
-        drawPath(scene, newPosOnSphere, refPos, 1.01, 0xffee00); // Bright yellow arcs
+        const path = drawPath(scene, newPosOnSphere, refPos, 1.01, 0xffee00); // Bright yellow arcs
+        currentPaths.push(path);
     });
 }
