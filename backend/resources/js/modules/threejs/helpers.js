@@ -8,16 +8,16 @@ import * as THREE from 'three';
  * @returns {THREE.Vector3} - The corresponding Vector3 position.
  */
 export function latLngToVector3(lat, lng, radius = 1) {
-    const phi = THREE.MathUtils.degToRad(90 - lat);
-    const theta = THREE.MathUtils.degToRad(lng);
+    const phi = THREE.MathUtils.degToRad(lat - 90);
+    const theta = THREE.MathUtils.degToRad(-lng);
 
+    // Spherical to Cartesian conversion
     const x = radius * Math.sin(phi) * Math.cos(theta);
     const y = radius * Math.cos(phi);
     const z = radius * Math.sin(phi) * Math.sin(theta);
 
     return new THREE.Vector3(x, y, z);
 }
-
 /**
  * Starts the animation loop for rendering the scene.
  * @param {THREE.WebGLRenderer} renderer - The renderer.
@@ -30,8 +30,6 @@ export function startAnimation(renderer, scene, camera, controls, earthGroup) {
     function animate() {
         requestAnimationFrame(animate);
 
-        earthGroup.rotation.y = 0; // Align prime meridian
-        earthGroup.rotation.z = THREE.MathUtils.degToRad(-23.4); // Earth's axial tilt
         controls.update();
 
         renderer.render(scene, camera);

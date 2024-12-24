@@ -8,7 +8,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     const { scene, camera, renderer, controls } = setupScene();
     const earthGroup = await createEarth();
     scene.add(earthGroup);
-    const referenceMarkers = addMarkers(scene);
+    const referenceMarkers = addMarkers(earthGroup);
     handleForm(scene, referenceMarkers);
     startAnimation(renderer, scene, camera, controls, earthGroup);
 });
