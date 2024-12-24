@@ -14,14 +14,12 @@ export async function createEarth() {
         earthMap,
         earthBump,
         earthSpec,
-        earthLights,
         cloudMap,
         cloudAlpha
     ] = await Promise.all([
         loadTexture(loader, '/textures/00_earthmap1k.jpg'),
         loadTexture(loader, '/textures/01_earthbump1k.jpg'),
         loadTexture(loader, '/textures/02_earthspec1k.jpg'),
-        loadTexture(loader, '/textures/03_earthlights1k.jpg'),
         loadTexture(loader, '/textures/04_earthcloudmap.jpg'),
         loadTexture(loader, '/textures/05_earthcloudmaptrans.jpg')
     ]);
@@ -40,21 +38,13 @@ export async function createEarth() {
     const earthDayMesh = new THREE.Mesh(earthGeo, earthDayMat);
     group.add(earthDayMesh);
 
-    // Night Earth (City Lights)
-    const earthNightMat = new THREE.MeshLambertMaterial({
-        emissive: 0xffffff,
-        emissiveMap: earthLights,
-        color: 0x000000,
-    });
-    const earthNightMesh = new THREE.Mesh(earthGeo, earthNightMat);
-    group.add(earthNightMesh);
 
     // Clouds
     const cloudsMat = new THREE.MeshStandardMaterial({
         map: cloudMap,
         alphaMap: cloudAlpha,
         transparent: true,
-        opacity: 0.75,
+        opacity: 0.5,
         depthWrite: false,
     });
     const cloudsMesh = new THREE.Mesh(earthGeo, cloudsMat);
