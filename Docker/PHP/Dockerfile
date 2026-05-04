@@ -10,6 +10,7 @@ RUN apt update && apt install -y \
     zip \
     curl \
     unzip \
+    libicu-dev \
     libpng-dev \
     libonig-dev \
     libxml2-dev \
