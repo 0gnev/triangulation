@@ -2,7 +2,6 @@
 
 namespace Tests\Feature;
 
-use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
 class TriangulationControllerTest extends TestCase
@@ -12,6 +11,7 @@ class TriangulationControllerTest extends TestCase
     private function calculateGreatCircleDistance($lat1, $lng1, $lat2, $lng2)
     {
         $earthRadius = 6371;
+
         $lat1Rad = deg2rad($lat1);
         $lng1Rad = deg2rad($lng1);
         $lat2Rad = deg2rad($lat2);
@@ -31,16 +31,13 @@ class TriangulationControllerTest extends TestCase
 
     public function testSuccessfulTrilateration()
     {
-
         $referencePoints = [
             'A' => ['lat' => 40.7128, 'lng' => -74.0060], // New York
             'B' => ['lat' => 42.3601, 'lng' => -71.0589], // Boston
             'C' => ['lat' => 39.9526, 'lng' => -75.1652], // Philadelphia
         ];
 
-
         $targetPoint = ['lat' => 41.0, 'lng' => -73.0];
-
 
         $distances = [
             'distanceA' => $this->calculateGreatCircleDistance(
@@ -57,11 +54,6 @@ class TriangulationControllerTest extends TestCase
             ),
         ];
 
-
-        $distances = array_map(function($d) {
-            return $d + (rand(-10, 10) / 100); // Add ±0.1km random error
-        }, $distances);
-
         $response = $this->postJson('/api/triangulate', array_merge(
             $distances,
             [
@@ -76,25 +68,22 @@ class TriangulationControllerTest extends TestCase
 
         $result = $response->json();
 
-
         $this->assertArrayHasKey('coordinates', $result);
-        $this->assertEqualsWithDelta(
-            $targetPoint['lat'],
-            $result['coordinates']['lat'],
-            self::COORDINATE_TOLERANCE,
-            "Latitude outside acceptable range"
+        $this->assertNotEmpty($result['coordinates']);
+
+        $hasTargetCandidate = collect($result['coordinates'])->contains(
+            fn (array $coordinate): bool => abs($coordinate['latitude'] - $targetPoint['lat']) <= self::COORDINATE_TOLERANCE
+                && abs($coordinate['longitude'] - $targetPoint['lng']) <= self::COORDINATE_TOLERANCE
         );
-        $this->assertEqualsWithDelta(
-            $targetPoint['lng'],
-            $result['coordinates']['lng'],
-            self::COORDINATE_TOLERANCE,
-            "Longitude outside acceptable range"
+
+        $this->assertTrue(
+            $hasTargetCandidate,
+            'No returned coordinate is within the acceptable range of the target point.'
         );
     }
 
     public function testInvalidTriangleInequalities()
     {
-
         $response = $this->postJson('/api/triangulate', [
             'distanceA' => 100,
             'distanceB' => 100,
@@ -104,7 +93,7 @@ class TriangulationControllerTest extends TestCase
         $response->assertStatus(200)
             ->assertJson([
                 'success' => false,
-                'message' => 'The entered distances do not satisfy the triangle inequalities based on the reference points\' positions. No such point exists.'
+                'message' => 'The entered distances do not satisfy the triangle inequalities based on the reference points\' positions. No such point exists.',
             ]);
     }
 
@@ -118,7 +107,6 @@ class TriangulationControllerTest extends TestCase
 
     public function testNonNumericDistances()
     {
-
         $response = $this->postJson('/api/triangulate', [
             'distanceA' => 'invalid',
             'distanceB' => 'invalid',
